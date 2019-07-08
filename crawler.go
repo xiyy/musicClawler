@@ -110,6 +110,8 @@ type Song struct {
 	Aacdl         string   `xml:"aacdl"`
 	Lyric         string   `xml:"lyric"`
 	Lyric_zz      string   `xml:"lyric_zz"`
+	RequestMp3Url string
+	ReqeustAacUrl string
 }
 
 var dbConfig = "root:123456@tcp(localhost:3306)/music"
@@ -184,74 +186,85 @@ func downloadMusic() error {
 		return err
 	}
 	defer rows.Close()
-
+	var songList []*Song
 	for rows.Next() {
 		song := new(Song)
 		var songId int
-		var requestMp3Url, requestAacUrl, mp3Url, aacUrl string
-		err = rows.Scan(&songId, &song.Music_id, &song.Mv_rid, &song.Name, &song.Song_url, &song.Artist, &song.Artid, &song.Singer, &song.Special, &song.Ridmd591, &song.Mp3size, &song.Artist_url, &song.Auther_url, &song.Playid, &song.Artist_pic, &song.Artist_pic240, &song.Path, &song.Mp3path, &song.Aacpath, &song.Wmadl, &song.Mp3dl, &song.Aacdl, &song.Lyric, &song.Lyric_zz, &requestMp3Url, &requestAacUrl, &mp3Url, &aacUrl)
+		var mp3Url, aacUrl string
+		err = rows.Scan(&songId, &song.Music_id, &song.Mv_rid, &song.Name, &song.Song_url, &song.Artist, &song.Artid, &song.Singer, &song.Special, &song.Ridmd591, &song.Mp3size, &song.Artist_url, &song.Auther_url, &song.Playid, &song.Artist_pic, &song.Artist_pic240, &song.Path, &song.Mp3path, &song.Aacpath, &song.Wmadl, &song.Mp3dl, &song.Aacdl, &song.Lyric, &song.Lyric_zz, &song.RequestMp3Url, &song.ReqeustAacUrl, &mp3Url, &aacUrl)
 		if err != nil {
 			log.Println(err.Error())
 			return err
 		}
-		log.Println("requestMp3Url:", requestMp3Url, "requestAacUrl:", requestAacUrl)
-		var dir = "E:/music/"
-		if song.Singer != "" {
-			dir = dir + song.Singer
-			createFile(dir)
-			log.Println("create singer dir:", dir)
-		} else {
-			log.Println("song.Singer is null")
-			return errors.New("song.Singer is null")
-		}
 		if song != nil {
-			if requestMp3Url != "" {
-				go func() {
-					mp3UrlRes, err := http.Get(requestMp3Url)
-					if err != nil {
-						log.Println(err.Error())
-						return
-					}
-					var mp3UrlResBytes []byte
-					mp3UrlResBytes, _ = ioutil.ReadAll(mp3UrlRes.Body)
-					defer mp3UrlRes.Body.Close()
-					mp3Url := string(mp3UrlResBytes)
-					log.Println("mp3Url:", mp3Url)
-					if mp3Url != "" {
-						filePath := dir +"/"+ song.Name + "_" + song.Music_id + "_" + song.Special + ".mp3"
-						log.Println(filePath)
-						downLoad(mp3Url, filePath)
-					}
-
-				}()
-
-			}
-
-			if requestAacUrl != "" {
-				go func() {
-					aacUrlRes, err := http.Get(requestAacUrl)
-					if err != nil {
-						log.Println(err.Error())
-						return
-					}
-					var aacUrlResBytes []byte
-					aacUrlResBytes, _ = ioutil.ReadAll(aacUrlRes.Body)
-					defer aacUrlRes.Body.Close()
-					aacUrl := string(aacUrlResBytes)
-					log.Println("aacUrl:", aacUrl)
-					if aacUrl != "" {
-						filePath := dir +"/"+ song.Name + "_" + song.Music_id + "_" + song.Special + ".aac"
-						log.Println(filePath)
-						go downLoad(aacUrl, filePath)
-					}
-				}()
-			}
-
+			log.Println("requestMp3Url:", song.RequestMp3Url, "requestAacUrl:", song.ReqeustAacUrl)
+			songList = append(songList, song)
 		} else {
 			log.Println("song==nil")
 		}
-		time.Sleep(time.Millisecond*125)
 
+	}
+	len := len(songList)
+	log.Println("songListLen:", len)
+
+	if len > 0 {
+		for _, v := range songList {
+			if v != nil {
+				var dir = "E:/music/"
+				if v.Singer != "" {
+					dir = dir + v.Singer
+					createFile(dir)
+					log.Println("create singer dir:", dir)
+				} else {
+					log.Println("song.Singer is null")
+					return errors.New("song.Singer is null")
+				}
+				if v.RequestMp3Url != "" {
+					go func() {
+						mp3UrlRes, err := http.Get(v.RequestMp3Url)
+						if err != nil {
+							log.Println(err.Error())
+							return
+						}
+						var mp3UrlResBytes []byte
+						mp3UrlResBytes, _ = ioutil.ReadAll(mp3UrlRes.Body)
+						defer mp3UrlRes.Body.Close()
+						mp3Url := string(mp3UrlResBytes)
+						log.Println("mp3Url:", mp3Url)
+						if mp3Url != "" {
+							filePath := dir + "/" + v.Name + "_" + v.Music_id + "_" + v.Special + ".mp3"
+							log.Println(filePath)
+							downLoad(mp3Url, filePath)
+						}
+
+					}()
+
+				}
+
+				if v.ReqeustAacUrl != "" {
+					go func() {
+						aacUrlRes, err := http.Get(v.ReqeustAacUrl)
+						if err != nil {
+							log.Println(err.Error())
+							return
+						}
+						var aacUrlResBytes []byte
+						aacUrlResBytes, _ = ioutil.ReadAll(aacUrlRes.Body)
+						defer aacUrlRes.Body.Close()
+						aacUrl := string(aacUrlResBytes)
+						log.Println("aacUrl:", aacUrl)
+						if aacUrl != "" {
+							filePath := dir + "/" + v.Name + "_" + v.Music_id + "_" + v.Special + ".aac"
+							log.Println(filePath)
+							downLoad(aacUrl, filePath)
+						}
+					}()
+				}
+
+			}
+
+			time.Sleep(time.Millisecond * 200)
+		}
 	}
 
 	return nil
